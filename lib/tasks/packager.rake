@@ -35,6 +35,10 @@ namespace :packager do
   end
 end
 
+def handle_report
+  @handle_report ||= File.open('/tmp/handle_report.txt', 'w')
+end
+
 def log
   @log ||= Packager::Log.new(config['output_level'])
 end
@@ -173,6 +177,7 @@ def process_mets (mets_file,parentColl = nil)
       item = createItem(params,depositor) unless @debugging
       log.info "Attaching Uploaded Files..."
       workFiles = AttachFilesToWorkJob.perform_now(item,uploadedFiles) unless @debugging
+      handle_report.write("#{params['handle']},#{item.id}\n")
       return item
     end
   end
@@ -180,16 +185,12 @@ end
 
 def collect_params(dom)
 
-  puts dom
   params = Hash.new {|h,k| h[k]=[]}
 
   config['fields'].each do |field|
-    puts field
     if field[1].include? "xpath"
-      puts "HERE"
       field[1]['xpath'].each do |current_xpath|
         metadata = dom.xpath("#{config['DSpace ITEM']['desc_metadata_prefix']}#{current_xpath}", config['DSpace ITEM']['namespace'])
-        puts "#{field[0]} - #{metadata}"
         if !metadata.empty?
           if field[1]['type'].include? "Array"
             metadata.each do |node|
@@ -227,8 +228,6 @@ def createItem (params, depositor, parent = nil)
   rType = @default_type
   rType = params['resource_type'].first unless params['resource_type'].first.nil?
 
-  puts params
-
   item = Kernel.const_get(config['type_to_work_map'][rType]).new(id: id)
 
   # item = Thesis.new(id: ActiveFedora::Noid::Service.new.mint)
@@ -248,6 +247,7 @@ def createItem (params, depositor, parent = nil)
   item.update(params)
   item.apply_depositor_metadata(depositor.user_key)
   item.save
+
   return item
 end
 
